@@ -1,0 +1,1979 @@
+--// ===== BẢNG CHỈNH TƯ THẾ ĐA DUMMY — PHIÊN BẢN V8.0 (UI MỚI + ICON VECTOR + XÓA OUTPUT) =====
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local Workspace = game:GetService("Workspace")
+
+--// ===== ĐỊNH NGHĨA KHỚP XƯƠNG =====
+local RIG = {
+	R6 = {
+		container = "Torso",
+		joints = {
+			"Right Shoulder", "Left Shoulder",
+			"Right Hip", "Left Hip",
+			"Neck", "RootJoint",
+		},
+	},
+	R15 = {
+		jointOwners = {
+			["Root"]          = "HumanoidRootPart",
+			["Waist"]         = "LowerTorso",
+			["Neck"]          = "UpperTorso",
+			["RightShoulder"] = "RightUpperArm",
+			["RightElbow"]    = "RightLowerArm",
+			["RightWrist"]    = "RightHand",
+			["LeftShoulder"]  = "LeftUpperArm",
+			["LeftElbow"]     = "LeftLowerArm",
+			["LeftWrist"]     = "LeftHand",
+			["RightHip"]      = "RightUpperLeg",
+			["RightKnee"]     = "RightLowerLeg",
+			["RightAnkle"]    = "RightFoot",
+			["LeftHip"]       = "LeftUpperLeg",
+			["LeftKnee"]      = "LeftLowerLeg",
+			["LeftAnkle"]     = "LeftFoot",
+		},
+		joints = {
+			"Root", "Waist", "Neck",
+			"RightShoulder", "RightElbow", "RightWrist",
+			"LeftShoulder", "LeftElbow", "LeftWrist",
+			"RightHip", "RightKnee", "RightAnkle",
+			"LeftHip", "LeftKnee", "LeftAnkle",
+		},
+	},
+}
+
+--// ===== HỆ THỐNG SONG NGỮ TỰ ĐỘNG DỊCH =====
+local currentLang = "VI"
+local LANG_DATA = {
+	VI = {
+		Title = "Pose Editor",
+		Subtitle = "v8.0",
+		SelectDummy = "Bấm vào 1 Dummy bất kỳ để chọn!",
+		ActiveDummy = "Đang sửa: %s",
+		AnimName = "TÊN HOẠT ẢNH",
+		RigType = "LOẠI NHÂN VẬT",
+		LangType = "NGÔN NGỮ",
+		Joints = "CHỌN KHỚP XƯƠNG",
+		Step = "ĐỘ NHẠY ĐIỀU CHỈNH",
+		StepValue = "Mức: %d",
+		Rotate = "XOAY KHỚP",
+		Move = "DỊCH VỊ TRÍ",
+		Gizmo = "ĐIỀU KHIỂN CHẠM",
+		GizmoMove = "Di Chuyển",
+		GizmoRotate = "Xoay",
+		GizmoHint = "Vuốt trong vùng dưới để chỉnh khớp theo trục đã chọn",
+		TouchpadLabel = "Kéo ngón tay trong vùng này",
+		Reset = "Đặt Lại",
+		Save = "Lưu Tư Thế",
+		Clear = "Xóa",
+		NoDummyErr = "-- Bạn chưa chọn bất kỳ Dummy nào từ Workspace cả!",
+		NoJointsErr = "-- Bạn chưa chỉnh sửa khớp xương nào cả, không có gì để lưu!",
+		OutputTitle = "Mã Code Tư Thế",
+		ConsoleInit = "-- Mã code tư thế sẽ xuất hiện ở đây khi bạn nhấn 'Lưu Tư Thế'...",
+		Copy = "Sao Chép",
+		Copied = "Đã chép",
+		NotSupported = "Không hỗ trợ",
+		ExportSuccess = "Đã xuất!",
+		EmptyMsg = "Trống Trơn!",
+		Cleared = "Đã xóa",
+	},
+	EN = {
+		Title = "Pose Editor",
+		Subtitle = "v8.0",
+		SelectDummy = "Click any Dummy to select!",
+		ActiveDummy = "Editing: %s",
+		AnimName = "ANIMATION NAME",
+		RigType = "RIG TYPE",
+		LangType = "LANGUAGE",
+		Joints = "SELECT JOINTS",
+		Step = "ADJUSTMENT STEP",
+		StepValue = "Step: %d",
+		Rotate = "ROTATE JOINTS",
+		Move = "MOVE POSITION",
+		Gizmo = "TOUCH CONTROL",
+		GizmoMove = "Move",
+		GizmoRotate = "Rotate",
+		GizmoHint = "Drag inside the area below to adjust the joint on the selected axis",
+		TouchpadLabel = "Drag your finger in this area",
+		Reset = "Reset",
+		Save = "Save Pose",
+		Clear = "Clear",
+		NoDummyErr = "-- You haven't selected any Dummy from Workspace yet!",
+		NoJointsErr = "-- No joints modified yet, nothing to save!",
+		OutputTitle = "Saved Pose Code",
+		ConsoleInit = "-- Pose code will appear here when you click 'Save Pose'...",
+		Copy = "Copy All",
+		Copied = "Copied",
+		NotSupported = "Not Support",
+		ExportSuccess = "Exported!",
+		EmptyMsg = "Empty!",
+		Cleared = "Cleared",
+	}
+}
+
+--// ===== TRẠNG THÁI =====
+local currentDummy = nil
+local currentRig = "R6"
+local names = RIG[currentRig].joints
+local selected = names[1]
+local step = 5
+local dirtyMotors = {}
+local originalC0 = {}
+local gizmoMode = "Move"
+local gizmoAxis = "X"
+
+--// ===== THEME MỚI: tím-đen ấm + ngọc lam, thay cho xanh dương/đen mặc định =====
+local THEME = {
+	Background    = Color3.fromRGB(22, 20, 28),   -- #16141C tím-đen ấm
+	BackgroundLo  = Color3.fromRGB(14, 13, 18),
+	Surface       = Color3.fromRGB(30, 27, 38),   -- #1E1B26
+	Header        = Color3.fromRGB(18, 17, 23),
+	Accent        = Color3.fromRGB(61, 217, 196), -- #3DD9C4 ngọc lam
+	AccentDim     = Color3.fromRGB(42, 157, 144), -- #2A9D90
+	ButtonIdle    = Color3.fromRGB(40, 37, 48),
+	ButtonHover   = Color3.fromRGB(54, 50, 64),
+	ButtonActive  = Color3.fromRGB(42, 157, 144),
+	TextMain      = Color3.fromRGB(237, 234, 245), -- #EDEAF5
+	TextDim       = Color3.fromRGB(142, 137, 156), -- #8E899C
+	Success       = Color3.fromRGB(82, 209, 130),
+	Danger        = Color3.fromRGB(224, 96, 96),
+	Dirty         = Color3.fromRGB(244, 166, 35),  -- #F4A623
+	RigTabIdle    = Color3.fromRGB(34, 31, 42),
+	RigTabActive  = Color3.fromRGB(61, 217, 196),
+	OutputBg      = Color3.fromRGB(14, 13, 18),
+	AxisX         = Color3.fromRGB(224, 96, 96),
+	AxisY         = Color3.fromRGB(106, 209, 130),
+	AxisZ         = Color3.fromRGB(96, 156, 224),
+}
+
+local CORNER = 8
+
+--// ===== KHỞI TẠO UI =====
+local player = Players.LocalPlayer
+local gui = Instance.new("ScreenGui")
+gui.Name = "PoseEditorGuiV8"
+gui.ResetOnSpawn = false
+gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+gui.Parent = player:WaitForChild("PlayerGui")
+
+--// ===== HÀM TRỢ GIÚP =====
+local function addCorner(obj, radius)
+	local c = Instance.new("UICorner")
+	c.CornerRadius = UDim.new(0, radius or CORNER)
+	c.Parent = obj
+	return c
+end
+
+local function addStroke(obj, color, thickness, transparency)
+	local s = Instance.new("UIStroke")
+	s.Color = color or Color3.fromRGB(0, 0, 0)
+	s.Thickness = thickness or 1
+	s.Transparency = transparency or 0.5
+	s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	s.Parent = obj
+	return s
+end
+
+local function addGradient(obj, colorSeq, rotation)
+	local g = Instance.new("UIGradient")
+	g.Color = colorSeq
+	g.Rotation = rotation or 90
+	g.Parent = obj
+	return g
+end
+
+local function addPadding(obj, all)
+	local p = Instance.new("UIPadding")
+	p.PaddingTop = UDim.new(0, all)
+	p.PaddingBottom = UDim.new(0, all)
+	p.PaddingLeft = UDim.new(0, all)
+	p.PaddingRight = UDim.new(0, all)
+	p.Parent = obj
+	return p
+end
+
+local function tween(obj, props, t, style, dir)
+	return TweenService:Create(obj, TweenInfo.new(t or 0.12, style or Enum.EasingStyle.Quad, dir or Enum.EasingDirection.Out), props)
+end
+
+local function tweenColor(obj, prop, color, t)
+	tween(obj, {[prop] = color}, t or 0.12):Play()
+end
+
+local function popEffect(obj)
+	local originalSize = obj.Size
+	local grown = UDim2.new(originalSize.X.Scale, originalSize.X.Offset + 4, originalSize.Y.Scale, originalSize.Y.Offset + 2)
+	tween(obj, {Size = grown}, 0.06, Enum.EasingStyle.Quad, Enum.EasingDirection.Out):Play()
+	task.delay(0.06, function()
+		tween(obj, {Size = originalSize}, 0.12, Enum.EasingStyle.Back, Enum.EasingDirection.Out):Play()
+	end)
+end
+
+--// ===== ÂM THANH UI =====
+-- Dùng rbxasset:// (đóng gói sẵn trong client Roblox, KHÔNG qua mạng, không bao giờ bị xóa/riêng tư hóa)
+-- cho âm click — đây là cách chắc ăn nhất vì asset public trên toolbox có thể bị ẩn/xóa bất cứ lúc nào.
+-- Âm hover dùng ID public phổ biến, có pcall bảo vệ: nếu lỗi tải, UI vẫn hoạt động bình thường, chỉ im lặng.
+local SOUND_CLICK_ID = "rbxassetid://88442833509532" -- âm của bạn, dùng cho click (volume to hơn)
+local SOUND_HOVER_ID = "rbxassetid://88442833509532" -- cùng âm, dùng cho hover (volume nhỏ hơn để phân biệt)
+
+local soundClick = Instance.new("Sound")
+soundClick.SoundId = SOUND_CLICK_ID
+soundClick.Volume = 0.5
+soundClick.PlaybackSpeed = 1
+soundClick.Parent = gui
+
+local soundHover = Instance.new("Sound")
+soundHover.SoundId = SOUND_HOVER_ID
+soundHover.Volume = 0.22
+soundHover.PlaybackSpeed = 1.6 -- cao độ hơn click để cảm giác "nhẹ" khi chỉ rê chuột
+soundHover.Parent = gui
+
+local function playSound(soundObj)
+	pcall(function()
+		soundObj:Play()
+	end)
+end
+
+local function playClickSound() playSound(soundClick) end
+local function playHoverSound() playSound(soundHover) end
+
+-- Gắn hiệu ứng hover (phóng to nhẹ + sáng màu + glow viền đậm) + âm thanh hover/click cho MỌI nút
+-- dùng chung 1 hàm, để không phải sửa tay từng nút rời rạc trong file (dễ sót, dễ lỗi).
+-- baseColor: màu nền gốc của nút (dùng để biết màu "sáng hơn" cần tween về)
+-- hoverColor: (tùy chọn) màu khi hover; nếu không truyền, tự tính sáng hơn baseColor một chút
+local function setupButtonFX(button, baseColor, hoverColor)
+	if not baseColor then baseColor = button.BackgroundColor3 end
+	if not hoverColor then
+		local h, s, v = baseColor:ToHSV()
+		hoverColor = Color3.fromHSV(h, s, math.min(v + 0.18, 1))
+	end
+
+	local originalSize = button.Size
+	local hoverSize = UDim2.new(
+		originalSize.X.Scale, originalSize.X.Offset + 3,
+		originalSize.Y.Scale, originalSize.Y.Offset + 2
+	)
+
+	-- Glow viền đậm khi hover: 1 UIStroke riêng, trong suốt lúc thường, hiện đậm lên khi rê chuột
+	local glow = Instance.new("UIStroke")
+	glow.Color = THEME.Accent
+	glow.Thickness = 2
+	glow.Transparency = 1
+	glow.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	glow.Parent = button
+
+	button.MouseEnter:Connect(function()
+		playHoverSound()
+		tween(button, {BackgroundColor3 = hoverColor, Size = hoverSize}, 0.1):Play()
+		tween(glow, {Transparency = 0.25}, 0.12):Play()
+	end)
+
+	button.MouseLeave:Connect(function()
+		tween(button, {BackgroundColor3 = baseColor, Size = originalSize}, 0.12):Play()
+		tween(glow, {Transparency = 1}, 0.15):Play()
+	end)
+
+	button.MouseButton1Click:Connect(function()
+		playClickSound()
+	end)
+end
+
+-- Biến thể cho các tab nền trong suốt (R6/R15, VI/EN): không đổi màu nền (vì không có màu),
+-- chỉ phóng to nhẹ + âm thanh, để không phá vỡ hiệu ứng slider màu phía sau.
+local function setupTabFX(button)
+	local originalSize = button.Size
+	local hoverSize = UDim2.new(
+		originalSize.X.Scale, originalSize.X.Offset,
+		originalSize.Y.Scale, originalSize.Y.Offset - 2
+	)
+
+	button.MouseEnter:Connect(function()
+		playHoverSound()
+		tween(button, {Size = hoverSize}, 0.1):Play()
+	end)
+
+	button.MouseLeave:Connect(function()
+		tween(button, {Size = originalSize}, 0.12):Play()
+	end)
+
+	button.MouseButton1Click:Connect(function()
+		playClickSound()
+	end)
+end
+
+-- ===== SHIMMER: ánh sáng chéo lướt qua nút theo chu kỳ (giống hiệu ứng "shiny" trên nút loot box) =====
+-- Tạo 1 dải sáng mỏng nghiêng, dùng UIGradient để vẽ dải sáng, rồi tween Position của 1 Frame chứa nó
+-- chạy từ ngoài-trái sang ngoài-phải nút, lặp lại sau một khoảng nghỉ ngẫu nhiên để không "đều" và rô-bốt quá.
+local function addShimmer(button, periodSeconds)
+	periodSeconds = periodSeconds or 3.2
+
+	local clip = Instance.new("Frame")
+	clip.Name = "ShimmerClip"
+	clip.Size = UDim2.new(1, 0, 1, 0)
+	clip.BackgroundTransparency = 1
+	clip.ClipsDescendants = true
+	clip.ZIndex = button.ZIndex + 1
+	clip.Parent = button
+	-- tự bo góc theo nút để dải sáng không tràn ra ngoài hình bo góc
+	local corner = button:FindFirstChildOfClass("UICorner")
+	if corner then
+		local c2 = Instance.new("UICorner")
+		c2.CornerRadius = corner.CornerRadius
+		c2.Parent = clip
+	end
+
+	local shimmerBar = Instance.new("Frame")
+	shimmerBar.Name = "ShimmerBar"
+	shimmerBar.Size = UDim2.new(0, 24, 2, 0)
+	shimmerBar.Position = UDim2.new(-0.4, 0, -0.5, 0)
+	shimmerBar.Rotation = 18
+	shimmerBar.BackgroundColor3 = Color3.new(1, 1, 1)
+	shimmerBar.BorderSizePixel = 0
+	shimmerBar.ZIndex = clip.ZIndex
+	shimmerBar.Parent = clip
+
+	local grad = Instance.new("UIGradient")
+	grad.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 1),
+		NumberSequenceKeypoint.new(0.5, 0.55),
+		NumberSequenceKeypoint.new(1, 1),
+	})
+	grad.Parent = shimmerBar
+
+	task.spawn(function()
+		while button.Parent do
+			local t = tween(shimmerBar, {Position = UDim2.new(1.4, 0, -0.5, 0)}, 0.7, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
+			t:Play()
+			t.Completed:Wait()
+			shimmerBar.Position = UDim2.new(-0.4, 0, -0.5, 0)
+			task.wait(periodSeconds + math.random() * 1.5) -- nghỉ ngẫu nhiên để tự nhiên hơn
+		end
+	end)
+end
+
+-- ===== PULSE: nhịp đập nhẹ liên tục, dùng cho nút quan trọng (Save) để thu hút chú ý =====
+local function addPulse(button)
+	local baseScale = button.Size
+	local pulseScale = UDim2.new(
+		baseScale.X.Scale, baseScale.X.Offset + 2,
+		baseScale.Y.Scale, baseScale.Y.Offset + 1
+	)
+	local glowPulse = Instance.new("UIStroke")
+	glowPulse.Color = THEME.Success
+	glowPulse.Thickness = 1.5
+	glowPulse.Transparency = 0.6
+	glowPulse.Parent = button
+
+	task.spawn(function()
+		while button.Parent do
+			tween(button, {Size = pulseScale}, 1.0, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut):Play()
+			tween(glowPulse, {Transparency = 0.15}, 1.0, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut):Play()
+			task.wait(1.0)
+			tween(button, {Size = baseScale}, 1.0, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut):Play()
+			tween(glowPulse, {Transparency = 0.6}, 1.0, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut):Play()
+			task.wait(1.0)
+		end
+	end)
+end
+
+--// ===== ICON VECTOR (Frame/UIGradient/UICorner) — THAY EMOJI =====
+-- Mỗi icon là 1 Frame nhỏ chứa các hình khối đơn giản, luôn hiển thị đúng, không phụ thuộc asset ngoài.
+local function makeIconHolder(parent, size)
+	local holder = Instance.new("Frame")
+	holder.Size = size or UDim2.new(0, 16, 0, 16)
+	holder.BackgroundTransparency = 1
+	holder.Parent = parent
+	return holder
+end
+
+-- Icon xương (bone) — 2 chấm tròn nối bằng 1 thanh chéo, dùng cho nút bật/tắt chính
+local function iconBone(parent, color)
+	local holder = makeIconHolder(parent, UDim2.new(0, 20, 0, 20))
+	local bar = Instance.new("Frame")
+	bar.Size = UDim2.new(0, 16, 0, 5)
+	bar.AnchorPoint = Vector2.new(0.5, 0.5)
+	bar.Position = UDim2.new(0.5, 0, 0.5, 0)
+	bar.Rotation = 45
+	bar.BackgroundColor3 = color
+	bar.BorderSizePixel = 0
+	bar.Parent = holder
+	addCorner(bar, 2)
+	for _, posScale in ipairs({Vector2.new(0.18, 0.18), Vector2.new(0.82, 0.82)}) do
+		local knob = Instance.new("Frame")
+		knob.Size = UDim2.new(0, 9, 0, 9)
+		knob.AnchorPoint = Vector2.new(0.5, 0.5)
+		knob.Position = UDim2.new(posScale.X, 0, posScale.Y, 0)
+		knob.BackgroundColor3 = color
+		knob.BorderSizePixel = 0
+		knob.Parent = holder
+		addCorner(knob, 5)
+	end
+	return holder
+end
+
+-- Icon X (đóng)
+local function iconClose(parent, color)
+	local holder = makeIconHolder(parent, UDim2.new(0, 12, 0, 12))
+	for _, rot in ipairs({45, -45}) do
+		local bar = Instance.new("Frame")
+		bar.Size = UDim2.new(0, 14, 0, 2)
+		bar.AnchorPoint = Vector2.new(0.5, 0.5)
+		bar.Position = UDim2.new(0.5, 0, 0.5, 0)
+		bar.Rotation = rot
+		bar.BackgroundColor3 = color
+		bar.BorderSizePixel = 0
+		bar.Parent = holder
+		addCorner(bar, 1)
+	end
+	return holder
+end
+
+-- Icon thùng rác (xóa)
+local function iconTrash(parent, color)
+	local holder = makeIconHolder(parent, UDim2.new(0, 12, 0, 13))
+	local lid = Instance.new("Frame")
+	lid.Size = UDim2.new(0, 12, 0, 2)
+	lid.Position = UDim2.new(0, 0, 0, 0)
+	lid.BackgroundColor3 = color
+	lid.BorderSizePixel = 0
+	lid.Parent = holder
+	addCorner(lid, 1)
+
+	local handle = Instance.new("Frame")
+	handle.Size = UDim2.new(0, 5, 0, 2)
+	handle.AnchorPoint = Vector2.new(0.5, 1)
+	handle.Position = UDim2.new(0.5, 0, 0, 0)
+	handle.BackgroundColor3 = color
+	handle.BorderSizePixel = 0
+	handle.Parent = holder
+	addCorner(handle, 1)
+
+	local body_ = Instance.new("Frame")
+	body_.Size = UDim2.new(0, 9, 0, 10)
+	body_.Position = UDim2.new(0.5, 0, 0, 3)
+	body_.AnchorPoint = Vector2.new(0.5, 0)
+	body_.BackgroundColor3 = color
+	body_.BorderSizePixel = 0
+	body_.Parent = holder
+	addCorner(body_, 2)
+
+	for _, xPct in ipairs({0.32, 0.68}) do
+		local line = Instance.new("Frame")
+		line.Size = UDim2.new(0, 1, 0, 6)
+		line.Position = UDim2.new(xPct, 0, 0.5, 1)
+		line.AnchorPoint = Vector2.new(0.5, 0.5)
+		line.BackgroundColor3 = THEME.OutputBg
+		line.BorderSizePixel = 0
+		line.ZIndex = 2
+		line.Parent = body_
+	end
+	return holder
+end
+
+-- Icon copy (2 ô vuông chồng nhau)
+local function iconCopy(parent, color)
+	local holder = makeIconHolder(parent, UDim2.new(0, 13, 0, 13))
+	local back = Instance.new("Frame")
+	back.Size = UDim2.new(0, 9, 0, 9)
+	back.Position = UDim2.new(0, 4, 0, 0)
+	back.BackgroundTransparency = 1
+	back.BorderSizePixel = 0
+	back.Parent = holder
+	addStroke(back, color, 1.4, 0)
+	addCorner(back, 2)
+
+	local front = Instance.new("Frame")
+	front.Size = UDim2.new(0, 9, 0, 9)
+	front.Position = UDim2.new(0, 0, 0, 4)
+	front.BackgroundColor3 = THEME.Surface
+	front.BorderSizePixel = 0
+	front.Parent = holder
+	addStroke(front, color, 1.4, 0)
+	addCorner(front, 2)
+	return holder
+end
+
+-- Icon mũi tên 4 hướng (Move)
+local function iconMove(parent, color)
+	local holder = makeIconHolder(parent, UDim2.new(0, 14, 0, 14))
+	local hBar = Instance.new("Frame")
+	hBar.Size = UDim2.new(0, 14, 0, 2)
+	hBar.AnchorPoint = Vector2.new(0.5, 0.5)
+	hBar.Position = UDim2.new(0.5, 0, 0.5, 0)
+	hBar.BackgroundColor3 = color
+	hBar.BorderSizePixel = 0
+	hBar.Parent = holder
+	addCorner(hBar, 1)
+	local vBar = hBar:Clone()
+	vBar.Size = UDim2.new(0, 2, 0, 14)
+	vBar.Parent = holder
+	return holder
+end
+
+-- Icon vòng xoay (Rotate) — vòng tròn hở + đầu mũi tên nhỏ
+local function iconRotate(parent, color)
+	local holder = makeIconHolder(parent, UDim2.new(0, 14, 0, 14))
+	local ring = Instance.new("Frame")
+	ring.Size = UDim2.new(0, 13, 0, 13)
+	ring.AnchorPoint = Vector2.new(0.5, 0.5)
+	ring.Position = UDim2.new(0.5, 0, 0.5, 0)
+	ring.BackgroundTransparency = 1
+	ring.Parent = holder
+	addCorner(ring, 7)
+	addStroke(ring, color, 2, 0)
+
+	local arrowHead = Instance.new("Frame")
+	arrowHead.Size = UDim2.new(0, 4, 0, 4)
+	arrowHead.Position = UDim2.new(1, -3, 0, 0)
+	arrowHead.Rotation = 45
+	arrowHead.BackgroundColor3 = color
+	arrowHead.BorderSizePixel = 0
+	arrowHead.Parent = holder
+	return holder
+end
+
+--// ===== NÚT BẬT TẮT NHANH (icon xương vector) =====
+local toggleBtn = Instance.new("TextButton")
+toggleBtn.Size = UDim2.new(0, 44, 0, 44)
+toggleBtn.Position = UDim2.new(0, 20, 0.2, -54)
+toggleBtn.BackgroundColor3 = THEME.Accent
+toggleBtn.Text = ""
+toggleBtn.AutoButtonColor = false
+toggleBtn.ZIndex = 10
+toggleBtn.Parent = gui
+addCorner(toggleBtn, 22)
+addStroke(toggleBtn, Color3.new(0, 0, 0), 1, 0.3)
+addGradient(toggleBtn, ColorSequence.new(THEME.Accent, THEME.AccentDim), 90)
+
+local toggleIcon = iconBone(toggleBtn, Color3.fromRGB(18, 17, 23))
+toggleIcon.AnchorPoint = Vector2.new(0.5, 0.5)
+toggleIcon.Position = UDim2.new(0.5, 0, 0.5, 0)
+toggleIcon.ZIndex = 11
+for _, d in ipairs(toggleIcon:GetDescendants()) do
+	if d:IsA("GuiObject") then
+		d.ZIndex = 11
+	end
+end
+setupButtonFX(toggleBtn, THEME.Accent)
+
+--// ===== KHUNG CHÍNH =====
+local FRAME_W = 250
+local FRAME_H = 420
+local FRAME_TARGET_POS = UDim2.new(0, 20, 0.2, 0)
+local FRAME_START_POS = UDim2.new(0, -FRAME_W - 40, 0.2, 0)
+
+local frame = Instance.new("Frame")
+frame.Name = "MainFrame"
+frame.Size = UDim2.new(0, FRAME_W, 0, FRAME_H)
+frame.Position = FRAME_START_POS
+frame.BackgroundColor3 = THEME.Background
+frame.BorderSizePixel = 0
+frame.Active = true
+frame.Parent = gui
+addCorner(frame, 14)
+addStroke(frame, Color3.fromRGB(0, 0, 0), 1, 0.2)
+
+-- shadow giả lập bằng 1 frame mờ phía sau, sâu hơn bản cũ
+local shadow = Instance.new("Frame")
+shadow.Size = UDim2.new(1, 16, 1, 16)
+shadow.Position = UDim2.new(0, -8, 0, -8)
+shadow.BackgroundColor3 = Color3.new(0, 0, 0)
+shadow.BackgroundTransparency = 0.55
+shadow.ZIndex = -1
+shadow.Parent = frame
+addCorner(shadow, 18)
+
+tween(frame, {Position = FRAME_TARGET_POS}, 0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out):Play()
+
+--// ===== TIÊU ĐỀ KHUNG CHÍNH =====
+local header = Instance.new("Frame")
+header.Size = UDim2.new(1, 0, 0, 38)
+header.BackgroundColor3 = THEME.Header
+header.Parent = frame
+addCorner(header, 14)
+addGradient(header, ColorSequence.new(THEME.Header, THEME.Background), 90)
+
+local headerMask = Instance.new("Frame")
+headerMask.BackgroundColor3 = THEME.Header
+headerMask.BorderSizePixel = 0
+headerMask.Size = UDim2.new(1, 0, 0, 14)
+headerMask.Position = UDim2.new(0, 0, 1, -14)
+headerMask.Parent = header
+
+local headerAccentBar = Instance.new("Frame")
+headerAccentBar.Size = UDim2.new(0, 3, 1, -12)
+headerAccentBar.Position = UDim2.new(0, 8, 0, 6)
+headerAccentBar.BackgroundColor3 = THEME.Accent
+headerAccentBar.BorderSizePixel = 0
+headerAccentBar.Parent = header
+addCorner(headerAccentBar, 2)
+
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, -90, 0, 16)
+title.Position = UDim2.new(0, 18, 0, 5)
+title.BackgroundTransparency = 1
+title.Font = Enum.Font.GothamBold
+title.TextSize = 13
+title.TextColor3 = THEME.TextMain
+title.TextXAlignment = Enum.TextXAlignment.Left
+title.Parent = header
+
+local subtitle = Instance.new("TextLabel")
+subtitle.Size = UDim2.new(1, -90, 0, 12)
+subtitle.Position = UDim2.new(0, 18, 0, 20)
+subtitle.BackgroundTransparency = 1
+subtitle.Font = Enum.Font.Gotham
+subtitle.TextSize = 9
+subtitle.TextColor3 = THEME.Accent
+subtitle.TextXAlignment = Enum.TextXAlignment.Left
+subtitle.Parent = header
+
+local toggleOutputBtn = Instance.new("TextButton")
+toggleOutputBtn.Size = UDim2.new(0, 26, 0, 26)
+toggleOutputBtn.Position = UDim2.new(1, -62, 0, 6)
+toggleOutputBtn.BackgroundColor3 = THEME.ButtonIdle
+toggleOutputBtn.Text = ""
+toggleOutputBtn.AutoButtonColor = false
+toggleOutputBtn.Parent = header
+addCorner(toggleOutputBtn, 6)
+do
+	local docIcon = makeIconHolder(toggleOutputBtn, UDim2.new(0, 12, 0, 12))
+	docIcon.AnchorPoint = Vector2.new(0.5, 0.5)
+	docIcon.Position = UDim2.new(0.5, 0, 0.5, 0)
+	local page = Instance.new("Frame")
+	page.Size = UDim2.new(1, 0, 1, 0)
+	page.BackgroundColor3 = THEME.Accent
+	page.BorderSizePixel = 0
+	page.Parent = docIcon
+	addCorner(page, 2)
+	for i, yPct in ipairs({0.3, 0.55, 0.8}) do
+		local line = Instance.new("Frame")
+		line.Size = UDim2.new(0.6, 0, 0, 1.4)
+		line.Position = UDim2.new(0.2, 0, yPct, 0)
+		line.BackgroundColor3 = THEME.Header
+		line.BorderSizePixel = 0
+		line.Parent = page
+	end
+end
+
+local closeBtn = Instance.new("TextButton")
+closeBtn.Size = UDim2.new(0, 26, 0, 26)
+closeBtn.Position = UDim2.new(1, -32, 0, 6)
+closeBtn.BackgroundColor3 = THEME.ButtonIdle
+closeBtn.Text = ""
+closeBtn.AutoButtonColor = false
+closeBtn.Parent = header
+addCorner(closeBtn, 6)
+do
+	local ic = iconClose(closeBtn, THEME.TextMain)
+	ic.AnchorPoint = Vector2.new(0.5, 0.5)
+	ic.Position = UDim2.new(0.5, 0, 0.5, 0)
+end
+setupButtonFX(toggleOutputBtn, THEME.ButtonIdle)
+setupButtonFX(closeBtn, THEME.ButtonIdle, THEME.Danger)
+
+--// ===== BẢNG OUTPUT RIÊNG BIỆT =====
+local outputFrame = Instance.new("Frame")
+outputFrame.Size = UDim2.new(0, 300, 0, FRAME_H)
+outputFrame.Position = UDim2.new(0, FRAME_W + 12, 0, 0)
+outputFrame.BackgroundColor3 = THEME.Background
+outputFrame.BorderSizePixel = 0
+outputFrame.ClipsDescendants = true
+outputFrame.Parent = frame
+addCorner(outputFrame, 14)
+addStroke(outputFrame, Color3.fromRGB(0, 0, 0), 1, 0.2)
+
+local outShadow = Instance.new("Frame")
+outShadow.Size = UDim2.new(1, 16, 1, 16)
+outShadow.Position = UDim2.new(0, -8, 0, -8)
+outShadow.BackgroundColor3 = Color3.new(0, 0, 0)
+outShadow.BackgroundTransparency = 0.55
+outShadow.ZIndex = -1
+outShadow.Parent = outputFrame
+addCorner(outShadow, 18)
+
+local outHeader = Instance.new("Frame")
+outHeader.Size = UDim2.new(1, 0, 0, 38)
+outHeader.BackgroundColor3 = THEME.Header
+outHeader.Parent = outputFrame
+addCorner(outHeader, 14)
+addGradient(outHeader, ColorSequence.new(THEME.Header, THEME.Background), 90)
+
+local outHeaderMask = Instance.new("Frame")
+outHeaderMask.BackgroundColor3 = THEME.Header
+outHeaderMask.BorderSizePixel = 0
+outHeaderMask.Size = UDim2.new(1, 0, 0, 14)
+outHeaderMask.Position = UDim2.new(0, 0, 1, -14)
+outHeaderMask.Parent = outHeader
+
+local outAccentBar = Instance.new("Frame")
+outAccentBar.Size = UDim2.new(0, 3, 1, -12)
+outAccentBar.Position = UDim2.new(0, 8, 0, 6)
+outAccentBar.BackgroundColor3 = THEME.Accent
+outAccentBar.BorderSizePixel = 0
+outAccentBar.Parent = outHeader
+addCorner(outAccentBar, 2)
+
+local outTitle = Instance.new("TextLabel")
+outTitle.Size = UDim2.new(1, -130, 1, 0)
+outTitle.Position = UDim2.new(0, 18, 0, 0)
+outTitle.BackgroundTransparency = 1
+outTitle.Font = Enum.Font.GothamBold
+outTitle.TextSize = 12
+outTitle.TextColor3 = THEME.Accent
+outTitle.TextXAlignment = Enum.TextXAlignment.Left
+outTitle.Parent = outHeader
+
+-- Nút Xóa output (mới)
+local clearOutBtn = Instance.new("TextButton")
+clearOutBtn.Size = UDim2.new(0, 60, 0, 24)
+clearOutBtn.Position = UDim2.new(1, -132, 0, 7)
+clearOutBtn.BackgroundColor3 = THEME.ButtonIdle
+clearOutBtn.AutoButtonColor = false
+clearOutBtn.Text = ""
+clearOutBtn.Parent = outHeader
+addCorner(clearOutBtn, 6)
+addStroke(clearOutBtn, THEME.Danger, 1, 0.5)
+
+local clearOutLayout = Instance.new("UIListLayout")
+clearOutLayout.FillDirection = Enum.FillDirection.Horizontal
+clearOutLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+clearOutLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+clearOutLayout.Padding = UDim.new(0, 4)
+clearOutLayout.Parent = clearOutBtn
+
+local clearOutIconHolder = Instance.new("Frame")
+clearOutIconHolder.Size = UDim2.new(0, 12, 0, 13)
+clearOutIconHolder.BackgroundTransparency = 1
+clearOutIconHolder.LayoutOrder = 1
+clearOutIconHolder.Parent = clearOutBtn
+iconTrash(clearOutIconHolder, THEME.Danger)
+
+local clearOutLabel = Instance.new("TextLabel")
+clearOutLabel.Size = UDim2.new(0, 36, 1, 0)
+clearOutLabel.BackgroundTransparency = 1
+clearOutLabel.Font = Enum.Font.GothamBold
+clearOutLabel.TextSize = 10
+clearOutLabel.TextColor3 = THEME.Danger
+clearOutLabel.LayoutOrder = 2
+clearOutLabel.Parent = clearOutBtn
+
+local copyAllBtn = Instance.new("TextButton")
+copyAllBtn.Size = UDim2.new(0, 60, 0, 24)
+copyAllBtn.Position = UDim2.new(1, -68, 0, 7)
+copyAllBtn.BackgroundColor3 = THEME.ButtonIdle
+copyAllBtn.AutoButtonColor = false
+copyAllBtn.Text = ""
+copyAllBtn.Parent = outHeader
+addCorner(copyAllBtn, 6)
+
+local copyAllLayout = Instance.new("UIListLayout")
+copyAllLayout.FillDirection = Enum.FillDirection.Horizontal
+copyAllLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+copyAllLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+copyAllLayout.Padding = UDim.new(0, 4)
+copyAllLayout.Parent = copyAllBtn
+
+local copyAllIconHolder = Instance.new("Frame")
+copyAllIconHolder.Size = UDim2.new(0, 13, 0, 13)
+copyAllIconHolder.BackgroundTransparency = 1
+copyAllIconHolder.LayoutOrder = 1
+copyAllIconHolder.Parent = copyAllBtn
+iconCopy(copyAllIconHolder, THEME.Accent)
+
+local copyAllLabel = Instance.new("TextLabel")
+copyAllLabel.Size = UDim2.new(0, 36, 1, 0)
+copyAllLabel.BackgroundTransparency = 1
+copyAllLabel.Font = Enum.Font.GothamBold
+copyAllLabel.TextSize = 10
+copyAllLabel.TextColor3 = THEME.TextMain
+copyAllLabel.LayoutOrder = 2
+copyAllLabel.Parent = copyAllBtn
+
+setupButtonFX(clearOutBtn, THEME.ButtonIdle, Color3.fromRGB(70, 40, 40))
+setupButtonFX(copyAllBtn, THEME.ButtonIdle)
+
+local outScroll = Instance.new("ScrollingFrame")
+outScroll.Size = UDim2.new(1, -16, 1, -50)
+outScroll.Position = UDim2.new(0, 8, 0, 44)
+outScroll.BackgroundColor3 = THEME.OutputBg
+outScroll.BorderSizePixel = 0
+outScroll.ScrollBarThickness = 3
+outScroll.ScrollBarImageColor3 = THEME.Accent
+outScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+outScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+outScroll.Parent = outputFrame
+addCorner(outScroll, 8)
+addStroke(outScroll, Color3.fromRGB(0,0,0), 1, 0.4)
+addPadding(outScroll, 8)
+
+local outListLayout = Instance.new("UIListLayout")
+outListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+outListLayout.Padding = UDim.new(0, 8)
+outListLayout.Parent = outScroll
+
+-- Nhãn rỗng hiển thị khi chưa có lần lưu nào (thay cho outTextBox cũ)
+local outEmptyLabel = Instance.new("TextLabel")
+outEmptyLabel.Size = UDim2.new(1, 0, 0, 16)
+outEmptyLabel.BackgroundTransparency = 1
+outEmptyLabel.TextXAlignment = Enum.TextXAlignment.Left
+outEmptyLabel.Font = Enum.Font.Code
+outEmptyLabel.TextSize = 10
+outEmptyLabel.TextColor3 = THEME.TextDim
+outEmptyLabel.LayoutOrder = 0
+outEmptyLabel.Parent = outScroll
+
+-- Danh sách các lần lưu (mỗi entry = 1 card riêng, có nút Copy riêng, KHÔNG bị mất khi lưu lần mới)
+local outputEntries = {} -- { {card=Frame, text=string, copyLabel=TextLabel}, ... }
+local outputEntryOrder = 0
+
+local function getAllEntriesText()
+	local parts = {}
+	for _, entry in ipairs(outputEntries) do
+		table.insert(parts, entry.text)
+	end
+	return table.concat(parts, "\n\n")
+end
+
+local function refreshEmptyLabelVisibility()
+	outEmptyLabel.Visible = (#outputEntries == 0)
+end
+
+local function addOutputEntry(resultText, dict)
+	outputEntryOrder += 1
+	local myOrder = outputEntryOrder
+
+	local card = Instance.new("Frame")
+	card.Name = "Entry" .. myOrder
+	card.Size = UDim2.new(1, 0, 0, 0)
+	card.AutomaticSize = Enum.AutomaticSize.Y
+	card.BackgroundColor3 = THEME.Surface
+	card.LayoutOrder = myOrder
+	card.Parent = outScroll
+	addCorner(card, 6)
+	addStroke(card, Color3.fromRGB(0, 0, 0), 1, 0.5)
+	addPadding(card, 6)
+
+	local cardLayout = Instance.new("UIListLayout")
+	cardLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	cardLayout.Padding = UDim.new(0, 4)
+	cardLayout.Parent = card
+
+	-- Hàng tiêu đề nhỏ: số thứ tự lần lưu + nút Copy riêng cho entry này
+	local cardHeader = Instance.new("Frame")
+	cardHeader.Size = UDim2.new(1, 0, 0, 20)
+	cardHeader.BackgroundTransparency = 1
+	cardHeader.LayoutOrder = 1
+	cardHeader.Parent = card
+
+	local cardIndexLabel = Instance.new("TextLabel")
+	cardIndexLabel.Size = UDim2.new(1, -106, 1, 0)
+	cardIndexLabel.BackgroundTransparency = 1
+	cardIndexLabel.Font = Enum.Font.GothamBold
+	cardIndexLabel.TextSize = 9.5
+	cardIndexLabel.TextColor3 = THEME.Accent
+	cardIndexLabel.TextXAlignment = Enum.TextXAlignment.Left
+	cardIndexLabel.Text = "#" .. myOrder
+	cardIndexLabel.Parent = cardHeader
+
+	local entryDeleteBtn = Instance.new("TextButton")
+	entryDeleteBtn.Size = UDim2.new(0, 22, 0, 18)
+	entryDeleteBtn.Position = UDim2.new(1, -22, 0, 1)
+	entryDeleteBtn.BackgroundColor3 = THEME.ButtonIdle
+	entryDeleteBtn.AutoButtonColor = false
+	entryDeleteBtn.Text = ""
+	entryDeleteBtn.Parent = cardHeader
+	addCorner(entryDeleteBtn, 5)
+	local entryDeleteIconHolder = Instance.new("Frame")
+	entryDeleteIconHolder.Size = UDim2.new(0, 10, 0, 11)
+	entryDeleteIconHolder.AnchorPoint = Vector2.new(0.5, 0.5)
+	entryDeleteIconHolder.Position = UDim2.new(0.5, 0, 0.5, 0)
+	entryDeleteIconHolder.BackgroundTransparency = 1
+	entryDeleteIconHolder.Parent = entryDeleteBtn
+	iconTrash(entryDeleteIconHolder, THEME.Danger)
+	setupButtonFX(entryDeleteBtn, THEME.ButtonIdle, Color3.fromRGB(70, 40, 40))
+
+	local entryCopyBtn = Instance.new("TextButton")
+	entryCopyBtn.Size = UDim2.new(0, 56, 0, 18)
+	entryCopyBtn.Position = UDim2.new(1, -80, 0, 1)
+	entryCopyBtn.BackgroundColor3 = THEME.ButtonIdle
+	entryCopyBtn.AutoButtonColor = false
+	entryCopyBtn.Text = ""
+	entryCopyBtn.Parent = cardHeader
+	addCorner(entryCopyBtn, 5)
+
+	local entryCopyLayout = Instance.new("UIListLayout")
+	entryCopyLayout.FillDirection = Enum.FillDirection.Horizontal
+	entryCopyLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+	entryCopyLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+	entryCopyLayout.Padding = UDim.new(0, 3)
+	entryCopyLayout.Parent = entryCopyBtn
+
+	local entryCopyIconHolder = Instance.new("Frame")
+	entryCopyIconHolder.Size = UDim2.new(0, 11, 0, 11)
+	entryCopyIconHolder.BackgroundTransparency = 1
+	entryCopyIconHolder.LayoutOrder = 1
+	entryCopyIconHolder.Parent = entryCopyBtn
+	iconCopy(entryCopyIconHolder, THEME.Accent)
+
+	local entryCopyLabel = Instance.new("TextLabel")
+	entryCopyLabel.Size = UDim2.new(0, 34, 1, 0)
+	entryCopyLabel.BackgroundTransparency = 1
+	entryCopyLabel.Font = Enum.Font.GothamBold
+	entryCopyLabel.TextSize = 9
+	entryCopyLabel.TextColor3 = THEME.TextMain
+	entryCopyLabel.Text = dict.Copy
+	entryCopyLabel.LayoutOrder = 2
+	entryCopyLabel.Parent = entryCopyBtn
+
+	setupButtonFX(entryCopyBtn, THEME.ButtonIdle)
+
+	-- Nội dung code của lần lưu này
+	local cardText = Instance.new("TextLabel")
+	cardText.Size = UDim2.new(1, 0, 0, 0)
+	cardText.AutomaticSize = Enum.AutomaticSize.Y
+	cardText.BackgroundTransparency = 1
+	cardText.TextXAlignment = Enum.TextXAlignment.Left
+	cardText.TextYAlignment = Enum.TextYAlignment.Top
+	cardText.Font = Enum.Font.Code
+	cardText.TextSize = 10
+	cardText.TextColor3 = Color3.fromRGB(150, 230, 200)
+	cardText.TextWrapped = true
+	cardText.Text = resultText
+	cardText.LayoutOrder = 2
+	cardText.Parent = card
+
+	local entry = {card = card, text = resultText, copyLabel = entryCopyLabel}
+	table.insert(outputEntries, entry)
+	refreshEmptyLabelVisibility()
+
+	entryCopyBtn.MouseButton1Click:Connect(function()
+		popEffect(entryCopyBtn)
+		if setclipboard then
+			setclipboard(entry.text)
+			entryCopyLabel.Text = dict.Copied
+		else
+			entryCopyLabel.Text = dict.NotSupported
+		end
+		task.delay(1, function() entryCopyLabel.Text = dict.Copy end)
+	end)
+
+	entryDeleteBtn.MouseButton1Click:Connect(function()
+		popEffect(entryDeleteBtn)
+		-- Xóa entry này khỏi danh sách logic ngay (để Copy All không còn tính nó)
+		for i, e in ipairs(outputEntries) do
+			if e == entry then
+				table.remove(outputEntries, i)
+				break
+			end
+		end
+		refreshEmptyLabelVisibility()
+		-- Hiệu ứng mờ dần rồi mới xóa card khỏi UI, mượt hơn so với biến mất ngay
+		tween(card, {BackgroundTransparency = 1}, 0.15):Play()
+		for _, d in ipairs(card:GetDescendants()) do
+			if d:IsA("TextLabel") or d:IsA("TextButton") then
+				tween(d, {TextTransparency = 1, BackgroundTransparency = 1}, 0.15):Play()
+			elseif d:IsA("Frame") then
+				tween(d, {BackgroundTransparency = 1}, 0.15):Play()
+			elseif d:IsA("UIStroke") then
+				tween(d, {Transparency = 1}, 0.15):Play()
+			end
+		end
+		task.delay(0.16, function()
+			card:Destroy()
+		end)
+	end)
+
+	return entry
+end
+
+local function clearAllOutputEntries()
+	for _, entry in ipairs(outputEntries) do
+		entry.card:Destroy()
+	end
+	outputEntries = {}
+	refreshEmptyLabelVisibility()
+end
+
+--// ===== KHU VỰC THÂN ĐIỀU KHIỂN (CUỘN TRƯỢT) =====
+local body = Instance.new("ScrollingFrame")
+body.Size = UDim2.new(1, 0, 1, -38)
+body.Position = UDim2.new(0, 0, 0, 38)
+body.BackgroundTransparency = 1
+body.BorderSizePixel = 0
+body.ScrollBarThickness = 3
+body.ScrollBarImageColor3 = THEME.Accent
+body.CanvasSize = UDim2.new(0, 0, 0, 700)
+body.Parent = frame
+addPadding(body, 10)
+
+local listLayout = Instance.new("UIListLayout")
+listLayout.SortOrder = Enum.SortOrder.LayoutOrder
+listLayout.Padding = UDim.new(0, 7)
+listLayout.Parent = body
+
+local order = 0
+local function nextOrder() order += 1 return order end
+
+local sectionLabels = {}
+local function sectionLabel(key, textDefault)
+	local row = Instance.new("Frame")
+	row.Size = UDim2.new(1, 0, 0, 12)
+	row.BackgroundTransparency = 1
+	row.LayoutOrder = nextOrder()
+	row.Parent = body
+
+	local dot = Instance.new("Frame")
+	dot.Size = UDim2.new(0, 3, 0, 3)
+	dot.Position = UDim2.new(0, 0, 0.5, 0)
+	dot.AnchorPoint = Vector2.new(0, 0.5)
+	dot.BackgroundColor3 = THEME.Accent
+	dot.BorderSizePixel = 0
+	dot.Parent = row
+	addCorner(dot, 2)
+
+	local lbl = Instance.new("TextLabel")
+	lbl.Size = UDim2.new(1, -8, 1, 0)
+	lbl.Position = UDim2.new(0, 8, 0, 0)
+	lbl.BackgroundTransparency = 1
+	lbl.Font = Enum.Font.GothamBold
+	lbl.TextSize = 9.5
+	lbl.TextColor3 = THEME.TextDim
+	lbl.TextXAlignment = Enum.TextXAlignment.Left
+	lbl.Parent = row
+	sectionLabels[key] = {instance = lbl, default = textDefault}
+	return lbl
+end
+
+--// ===== TRẠNG THÁI DUMMY =====
+sectionLabel("SelectDummy")
+local dummyTargetLabel = Instance.new("TextLabel")
+dummyTargetLabel.Size = UDim2.new(1, 0, 0, 24)
+dummyTargetLabel.BackgroundColor3 = Color3.fromRGB(48, 26, 26)
+dummyTargetLabel.Font = Enum.Font.GothamBold
+dummyTargetLabel.TextSize = 9.5
+dummyTargetLabel.TextColor3 = THEME.Danger
+dummyTargetLabel.TextWrapped = true
+dummyTargetLabel.LayoutOrder = nextOrder()
+dummyTargetLabel.Parent = body
+addCorner(dummyTargetLabel, 6)
+addPadding(dummyTargetLabel, 4)
+
+-- TÊN ANIMATION
+sectionLabel("AnimName")
+local animNameInput = Instance.new("TextBox")
+animNameInput.Size = UDim2.new(1, 0, 0, 26)
+animNameInput.BackgroundColor3 = THEME.Surface
+animNameInput.Text = "Idle"
+animNameInput.Font = Enum.Font.Gotham
+animNameInput.TextSize = 11
+animNameInput.TextColor3 = THEME.TextMain
+animNameInput.LayoutOrder = nextOrder()
+animNameInput.ClearTextOnFocus = false
+animNameInput.Parent = body
+addCorner(animNameInput, 6)
+addStroke(animNameInput, THEME.Accent, 1, 0.7)
+
+-- HÀNG: LOẠI RIG + NGÔN NGỮ
+local rowTabs = Instance.new("Frame")
+rowTabs.Size = UDim2.new(1, 0, 0, 24)
+rowTabs.BackgroundTransparency = 1
+rowTabs.LayoutOrder = nextOrder()
+rowTabs.Parent = body
+
+local rigTabContainer = Instance.new("Frame")
+rigTabContainer.Size = UDim2.new(0.5, -4, 1, 0)
+rigTabContainer.BackgroundColor3 = THEME.RigTabIdle
+rigTabContainer.Parent = rowTabs
+addCorner(rigTabContainer, 6)
+
+local rigSlider = Instance.new("Frame")
+rigSlider.Size = UDim2.new(0.5, 0, 1, 0)
+rigSlider.BackgroundColor3 = THEME.RigTabActive
+rigSlider.ZIndex = 2
+rigSlider.Parent = rigTabContainer
+addCorner(rigSlider, 6)
+
+local r6Tab = Instance.new("TextButton")
+r6Tab.Size = UDim2.new(0.5, 0, 1, 0)
+r6Tab.BackgroundTransparency = 1
+r6Tab.Text = "R6"
+r6Tab.Font = Enum.Font.GothamBold
+r6Tab.TextSize = 11
+r6Tab.TextColor3 = Color3.new(1, 1, 1)
+r6Tab.ZIndex = 3
+r6Tab.AutoButtonColor = false
+r6Tab.Parent = rigTabContainer
+
+local r15Tab = Instance.new("TextButton")
+r15Tab.Size = UDim2.new(0.5, 0, 1, 0)
+r15Tab.Position = UDim2.new(0.5, 0, 0, 0)
+r15Tab.BackgroundTransparency = 1
+r15Tab.Text = "R15"
+r15Tab.Font = Enum.Font.GothamBold
+r15Tab.TextSize = 11
+r15Tab.TextColor3 = THEME.TextDim
+r15Tab.ZIndex = 3
+r15Tab.AutoButtonColor = false
+r15Tab.Parent = rigTabContainer
+
+local langTabContainer = Instance.new("Frame")
+langTabContainer.Size = UDim2.new(0.5, -4, 1, 0)
+langTabContainer.Position = UDim2.new(0.5, 8, 0, 0)
+langTabContainer.BackgroundColor3 = THEME.RigTabIdle
+langTabContainer.Parent = rowTabs
+addCorner(langTabContainer, 6)
+
+local langSlider = Instance.new("Frame")
+langSlider.Size = UDim2.new(0.5, 0, 1, 0)
+langSlider.BackgroundColor3 = THEME.Dirty
+langSlider.ZIndex = 2
+langSlider.Parent = langTabContainer
+addCorner(langSlider, 6)
+
+local viTab = Instance.new("TextButton")
+viTab.Size = UDim2.new(0.5, 0, 1, 0)
+viTab.BackgroundTransparency = 1
+viTab.Text = "VI"
+viTab.Font = Enum.Font.GothamBold
+viTab.TextSize = 11
+viTab.TextColor3 = Color3.new(1, 1, 1)
+viTab.ZIndex = 3
+viTab.AutoButtonColor = false
+viTab.Parent = langTabContainer
+
+local enTab = Instance.new("TextButton")
+enTab.Size = UDim2.new(0.5, 0, 1, 0)
+enTab.Position = UDim2.new(0.5, 0, 0, 0)
+enTab.BackgroundTransparency = 1
+enTab.Text = "EN"
+enTab.Font = Enum.Font.GothamBold
+enTab.TextSize = 11
+enTab.TextColor3 = THEME.TextDim
+enTab.ZIndex = 3
+enTab.AutoButtonColor = false
+enTab.Parent = langTabContainer
+
+setupTabFX(r6Tab)
+setupTabFX(r15Tab)
+setupTabFX(viTab)
+setupTabFX(enTab)
+
+-- Khớp đang chọn + bộ đếm sửa
+local selectedRow = Instance.new("Frame")
+selectedRow.Size = UDim2.new(1, 0, 0, 20)
+selectedRow.BackgroundTransparency = 1
+selectedRow.LayoutOrder = nextOrder()
+selectedRow.Parent = body
+
+local selectedLabel = Instance.new("TextLabel")
+selectedLabel.Size = UDim2.new(0.65, 0, 1, 0)
+selectedLabel.BackgroundTransparency = 1
+selectedLabel.Text = selected
+selectedLabel.Font = Enum.Font.GothamBold
+selectedLabel.TextSize = 13
+selectedLabel.TextColor3 = THEME.Accent
+selectedLabel.TextXAlignment = Enum.TextXAlignment.Left
+selectedLabel.Parent = selectedRow
+
+local dirtyCountLabel = Instance.new("TextLabel")
+dirtyCountLabel.Size = UDim2.new(0.35, 0, 1, 0)
+dirtyCountLabel.Position = UDim2.new(0.65, 0, 0, 0)
+dirtyCountLabel.BackgroundTransparency = 1
+dirtyCountLabel.Text = "0"
+dirtyCountLabel.Font = Enum.Font.Gotham
+dirtyCountLabel.TextSize = 10
+dirtyCountLabel.TextColor3 = THEME.TextDim
+dirtyCountLabel.TextXAlignment = Enum.TextXAlignment.Right
+dirtyCountLabel.Parent = selectedRow
+
+--// ===== DANH SÁCH KHỚP XƯƠNG =====
+sectionLabel("Joints")
+local jointScroll = Instance.new("ScrollingFrame")
+jointScroll.Size = UDim2.new(1, 0, 0, 80)
+jointScroll.BackgroundColor3 = THEME.Surface
+jointScroll.BorderSizePixel = 0
+jointScroll.ScrollBarThickness = 2
+jointScroll.ScrollBarImageColor3 = THEME.Accent
+jointScroll.LayoutOrder = nextOrder()
+jointScroll.Parent = body
+addCorner(jointScroll, 6)
+addPadding(jointScroll, 4)
+
+local jointButtons = {}
+
+local function clearJointButtons()
+	for _, b in pairs(jointButtons) do b:Destroy() end
+	jointButtons = {}
+end
+
+local function refreshDirtyCount()
+	local count = 0
+	for _ in pairs(dirtyMotors) do count += 1 end
+	if currentLang == "VI" then
+		dirtyCountLabel.Text = count .. " đã sửa"
+	else
+		dirtyCountLabel.Text = count .. " modified"
+	end
+	dirtyCountLabel.TextColor3 = (count > 0) and THEME.Dirty or THEME.TextDim
+end
+
+local function setJointButtonState(name)
+	for n, b in pairs(jointButtons) do
+		if n == name then
+			tweenColor(b, "BackgroundColor3", THEME.ButtonActive, 0.1)
+		elseif b:GetAttribute("Dirty") then
+			tweenColor(b, "BackgroundColor3", Color3.fromRGB(72, 52, 20), 0.1)
+		else
+			tweenColor(b, "BackgroundColor3", THEME.ButtonIdle, 0.1)
+		end
+	end
+end
+
+local getMotor
+local selectJoint
+
+local function buildJointButtons()
+	clearJointButtons()
+	local list = RIG[currentRig].joints
+	local rows = math.ceil(#list / 2)
+	jointScroll.CanvasSize = UDim2.new(0, 0, 0, rows * 25)
+
+	for i, name in ipairs(list) do
+		local col = (i - 1) % 2
+		local row = math.floor((i - 1) / 2)
+		local b = Instance.new("TextButton")
+		b.Name = name
+		b.Size = UDim2.new(0.5, -3, 0, 22)
+		b.Position = UDim2.new(col * 0.5, col == 1 and 3 or 0, 0, row * 25)
+		b.BackgroundColor3 = (name == selected) and THEME.ButtonActive or THEME.ButtonIdle
+		b.Text = name
+		b.Font = Enum.Font.Gotham
+		b.TextSize = 9
+		b.TextColor3 = THEME.TextMain
+		b.AutoButtonColor = false
+		b.Parent = jointScroll
+		addCorner(b, 5)
+		jointButtons[name] = b
+
+		b.MouseButton1Click:Connect(function()
+			selectJoint(name)
+			popEffect(b)
+		end)
+
+		-- Joint button đổi màu động theo trạng thái active/dirty nên không dùng setupButtonFX (sẽ phá màu đó);
+		-- chỉ gắn âm thanh + phóng to nhẹ riêng cho loại nút này.
+		b.MouseEnter:Connect(function()
+			playHoverSound()
+			popEffect(b)
+		end)
+		b.MouseButton1Click:Connect(function()
+			playClickSound()
+		end)
+	end
+end
+
+--// ===== HỆ THỐNG ĐỔI NGÔN NGỮ (TỰ ĐỘNG DỊCH 100%) =====
+local function updateLanguage(lang)
+	currentLang = lang
+	local dict = LANG_DATA[lang]
+
+	title.Text = dict.Title
+	subtitle.Text = dict.Subtitle
+	outTitle.Text = dict.OutputTitle
+	copyAllLabel.Text = dict.Copy
+	clearOutLabel.Text = dict.Clear
+	outEmptyLabel.Text = dict.ConsoleInit
+
+	for key, data in pairs(sectionLabels) do
+		data.instance.Text = dict[key] or data.default
+	end
+
+	if not currentDummy then
+		dummyTargetLabel.Text = dict.SelectDummy
+	else
+		dummyTargetLabel.Text = string.format(dict.ActiveDummy, currentDummy.Name)
+	end
+
+	refreshDirtyCount()
+end
+
+--// ===== ĐỘ NHẠY STEP =====
+sectionLabel("Step")
+local stepRow = Instance.new("Frame")
+stepRow.Size = UDim2.new(1, 0, 0, 24)
+stepRow.BackgroundTransparency = 1
+stepRow.LayoutOrder = nextOrder()
+stepRow.Parent = body
+
+local stepLabel = Instance.new("TextLabel")
+stepLabel.Size = UDim2.new(0.4, -4, 1, 0)
+stepLabel.BackgroundColor3 = THEME.Surface
+stepLabel.Font = Enum.Font.GothamBold
+stepLabel.TextSize = 10
+stepLabel.TextColor3 = THEME.TextMain
+stepLabel.Parent = stepRow
+addCorner(stepLabel, 6)
+
+local function makeStepBtn(text, xPct, delta)
+	local b = Instance.new("TextButton")
+	b.Size = UDim2.new(0.3, -2, 1, 0)
+	b.Position = UDim2.new(xPct, 0, 0, 0)
+	b.BackgroundColor3 = THEME.ButtonIdle
+	b.Text = text
+	b.Font = Enum.Font.GothamBold
+	b.TextSize = 13
+	b.TextColor3 = THEME.TextMain
+	b.AutoButtonColor = false
+	b.Parent = stepRow
+	addCorner(b, 6)
+
+	b.MouseButton1Click:Connect(function()
+		step = math.clamp(step + delta, 1, 90)
+		stepLabel.Text = string.format(LANG_DATA[currentLang].StepValue, step)
+		popEffect(stepLabel)
+	end)
+	setupButtonFX(b, THEME.ButtonIdle)
+	return b
+end
+
+makeStepBtn("-", 0.4, -1)
+makeStepBtn("+", 0.7, 1)
+
+--// ===== TRA CỨU MOTOR THEO RIG =====
+getMotor = function(jointName)
+	if not currentDummy or not currentDummy.Parent then return nil end
+	if currentRig == "R6" then
+		local container = currentDummy:FindFirstChild(RIG.R6.container)
+		local motor = container and container:FindFirstChild(jointName)
+		if motor and motor:IsA("Motor6D") then return motor end
+		return currentDummy:FindFirstChild(jointName, true)
+	else
+		local ownerPartName = RIG.R15.jointOwners[jointName]
+		local part = ownerPartName and currentDummy:FindFirstChild(ownerPartName)
+		if part then
+			for _, child in ipairs(part:GetChildren()) do
+				if child:IsA("Motor6D") then return child end
+			end
+		end
+		return currentDummy:FindFirstChild(jointName, true)
+	end
+end
+
+--// ===== ĐIỀU KHIỂN KIỂU CẢM ỨNG (TOUCHPAD ẢO, THAY GIZMO 3D) =====
+local function markDirty(jointName, motor)
+	dirtyMotors[motor] = {jointName = jointName, motor = motor}
+	local btn = jointButtons[jointName]
+	if btn then
+		btn:SetAttribute("Dirty", true)
+		if selected ~= jointName then
+			tweenColor(btn, "BackgroundColor3", Color3.fromRGB(72, 52, 20), 0.1)
+		end
+	end
+	refreshDirtyCount()
+end
+
+selectJoint = function(name)
+	selected = name
+	selectedLabel.Text = name
+	setJointButtonState(name)
+	popEffect(selectedLabel)
+end
+
+--// ===== ĐIỀU KHIỂN CẢM ỨNG: CHỌN MOVE/ROTATE + TRỤC + VÙNG VUỐT TO =====
+sectionLabel("Gizmo")
+
+local gizmoRow = Instance.new("Frame")
+gizmoRow.Size = UDim2.new(1, 0, 0, 28)
+gizmoRow.BackgroundTransparency = 1
+gizmoRow.LayoutOrder = nextOrder()
+gizmoRow.Parent = body
+
+local gizmoButtons = {}
+local function makeGizmoBtn(modeName, xPct, wPct, color, iconFn)
+	local b = Instance.new("TextButton")
+	b.Size = UDim2.new(wPct, -2, 1, 0)
+	b.Position = UDim2.new(xPct, 0, 0, 0)
+	b.BackgroundColor3 = (gizmoMode == modeName) and color or THEME.ButtonIdle
+	b.Text = ""
+	b.AutoButtonColor = false
+	b.Parent = gizmoRow
+	addCorner(b, 6)
+
+	local rowLayout = Instance.new("UIListLayout")
+	rowLayout.FillDirection = Enum.FillDirection.Horizontal
+	rowLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+	rowLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+	rowLayout.Padding = UDim.new(0, 6)
+	rowLayout.Parent = b
+
+	local iconHolder = Instance.new("Frame")
+	iconHolder.Size = UDim2.new(0, 14, 0, 14)
+	iconHolder.BackgroundTransparency = 1
+	iconHolder.LayoutOrder = 1
+	iconHolder.Parent = b
+	iconFn(iconHolder, Color3.new(1, 1, 1))
+
+	local lbl = Instance.new("TextLabel")
+	lbl.Size = UDim2.new(0, 60, 1, 0)
+	lbl.BackgroundTransparency = 1
+	lbl.Font = Enum.Font.GothamBold
+	lbl.TextSize = 11
+	lbl.TextColor3 = Color3.new(1, 1, 1)
+	lbl.TextXAlignment = Enum.TextXAlignment.Left
+	lbl.LayoutOrder = 2
+	lbl.Parent = b
+
+	gizmoButtons[modeName] = {btn = b, color = color, label = lbl}
+	b.MouseButton1Click:Connect(function()
+		gizmoMode = modeName
+		for mode, data in pairs(gizmoButtons) do
+			tweenColor(data.btn, "BackgroundColor3", (mode == gizmoMode) and data.color or THEME.ButtonIdle, 0.1)
+		end
+		popEffect(b)
+	end)
+
+	-- Màu nền đổi động theo gizmoMode nên không dùng setupButtonFX đầy đủ; chỉ thêm âm + phóng to nhẹ.
+	b.MouseEnter:Connect(function()
+		playHoverSound()
+		popEffect(b)
+	end)
+	b.MouseButton1Click:Connect(function()
+		playClickSound()
+	end)
+
+	return b
+end
+
+makeGizmoBtn("Move", 0, 0.5, THEME.AccentDim, iconMove)
+makeGizmoBtn("Rotate", 0.5, 0.5, Color3.fromRGB(70, 150, 110), iconRotate)
+
+-- Hàng trục X / Y / Z
+local axisRow = Instance.new("Frame")
+axisRow.Size = UDim2.new(1, 0, 0, 24)
+axisRow.BackgroundTransparency = 1
+axisRow.LayoutOrder = nextOrder()
+axisRow.Parent = body
+
+local axisButtons = {}
+local AXIS_COLORS = {X = THEME.AxisX, Y = THEME.AxisY, Z = THEME.AxisZ}
+
+local function setAxisButtonState()
+	for axisName, b in pairs(axisButtons) do
+		tweenColor(b, "BackgroundColor3", (axisName == gizmoAxis) and AXIS_COLORS[axisName] or THEME.ButtonIdle, 0.1)
+	end
+end
+
+for i, axisName in ipairs({"X", "Y", "Z"}) do
+	local b = Instance.new("TextButton")
+	b.Size = UDim2.new(0.333, -3, 1, 0)
+	b.Position = UDim2.new((i - 1) * 0.333, 0, 0, 0)
+	b.BackgroundColor3 = (axisName == gizmoAxis) and AXIS_COLORS[axisName] or THEME.ButtonIdle
+	b.Text = axisName
+	b.Font = Enum.Font.GothamBold
+	b.TextSize = 12
+	b.TextColor3 = Color3.new(1, 1, 1)
+	b.AutoButtonColor = false
+	b.Parent = axisRow
+	addCorner(b, 6)
+	axisButtons[axisName] = b
+	b.MouseButton1Click:Connect(function()
+		gizmoAxis = axisName
+		setAxisButtonState()
+		popEffect(b)
+	end)
+	b.MouseEnter:Connect(function()
+		playHoverSound()
+		popEffect(b)
+	end)
+	b.MouseButton1Click:Connect(function()
+		playClickSound()
+	end)
+end
+
+-- Vùng vuốt to (touchpad)
+local touchpad = Instance.new("Frame")
+touchpad.Size = UDim2.new(1, 0, 0, 72)
+touchpad.BackgroundColor3 = THEME.OutputBg
+touchpad.LayoutOrder = nextOrder()
+touchpad.Parent = body
+addCorner(touchpad, 10)
+addStroke(touchpad, THEME.Accent, 1, 0.6)
+
+local touchpadCenterDot = Instance.new("Frame")
+touchpadCenterDot.Size = UDim2.new(0, 10, 0, 10)
+touchpadCenterDot.AnchorPoint = Vector2.new(0.5, 0.5)
+touchpadCenterDot.Position = UDim2.new(0.5, 0, 0.5, 0)
+touchpadCenterDot.BackgroundColor3 = THEME.Accent
+touchpadCenterDot.Parent = touchpad
+addCorner(touchpadCenterDot, 5)
+
+local touchpadLabel = Instance.new("TextLabel")
+touchpadLabel.Size = UDim2.new(1, 0, 0, 14)
+touchpadLabel.Position = UDim2.new(0, 0, 1, -16)
+touchpadLabel.BackgroundTransparency = 1
+touchpadLabel.Font = Enum.Font.Gotham
+touchpadLabel.TextSize = 9
+touchpadLabel.TextColor3 = THEME.TextDim
+touchpadLabel.Parent = touchpad
+
+local gizmoHintLabel = Instance.new("TextLabel")
+gizmoHintLabel.Size = UDim2.new(1, 0, 0, 14)
+gizmoHintLabel.BackgroundTransparency = 1
+gizmoHintLabel.Font = Enum.Font.Gotham
+gizmoHintLabel.TextSize = 8
+gizmoHintLabel.TextColor3 = THEME.TextDim
+gizmoHintLabel.TextXAlignment = Enum.TextXAlignment.Left
+gizmoHintLabel.TextWrapped = true
+gizmoHintLabel.LayoutOrder = nextOrder()
+gizmoHintLabel.Parent = body
+
+--// ===== LOGIC KÉO TRÊN TOUCHPAD =====
+local padDragging = false
+local padDragStartPos = nil
+local padDragStartC0 = nil
+local padDragMotor = nil
+
+local PIXELS_PER_STUD = 12
+local PIXELS_PER_DEGREE = 2.5
+
+local function applyTouchpadDelta(deltaPixels)
+	if not padDragMotor or not padDragStartC0 then return end
+
+	if gizmoMode == "Move" then
+		local amount = deltaPixels.X / PIXELS_PER_STUD
+		local offset = Vector3.new(0, 0, 0)
+		if gizmoAxis == "X" then offset = Vector3.new(amount, 0, 0)
+		elseif gizmoAxis == "Y" then offset = Vector3.new(0, amount, 0)
+		else offset = Vector3.new(0, 0, amount) end
+		padDragMotor.C0 = padDragStartC0 * CFrame.new(offset)
+	else
+		local amountDeg = deltaPixels.X / PIXELS_PER_DEGREE
+		local rad = math.rad(amountDeg)
+		local rx, ry, rz = 0, 0, 0
+		if gizmoAxis == "X" then rx = rad
+		elseif gizmoAxis == "Y" then ry = rad
+		else rz = rad end
+		padDragMotor.C0 = padDragStartC0 * CFrame.Angles(rx, ry, rz)
+	end
+end
+
+local function beginPadDrag(screenPos)
+	local motor = getMotor(selected)
+	if not motor then return end
+	padDragging = true
+	padDragMotor = motor
+	padDragStartC0 = motor.C0
+	padDragStartPos = screenPos
+	tween(touchpadCenterDot, {BackgroundColor3 = THEME.Dirty}, 0.1):Play()
+end
+
+local function endPadDrag()
+	if padDragging and padDragMotor then
+		markDirty(selected, padDragMotor)
+	end
+	padDragging = false
+	padDragMotor = nil
+	padDragStartC0 = nil
+	padDragStartPos = nil
+	tween(touchpadCenterDot, {BackgroundColor3 = THEME.Accent}, 0.1):Play()
+end
+
+touchpad.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		beginPadDrag(Vector2.new(input.Position.X, input.Position.Y))
+	end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+	if not padDragging then return end
+	if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+		local currentPos = Vector2.new(input.Position.X, input.Position.Y)
+		applyTouchpadDelta(currentPos - padDragStartPos)
+	end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		if padDragging then endPadDrag() end
+	end
+end)
+
+local function selectNewDummy(model)
+	currentDummy = model
+	dummyTargetLabel.Text = string.format(LANG_DATA[currentLang].ActiveDummy, model.Name)
+	dummyTargetLabel.BackgroundColor3 = Color3.fromRGB(22, 46, 32)
+	dummyTargetLabel.TextColor3 = THEME.Success
+	popEffect(dummyTargetLabel)
+
+	dirtyMotors = {}
+	originalC0 = {}
+
+	for _, m in ipairs(currentDummy:GetDescendants()) do
+		if m:IsA("Motor6D") then
+			originalC0[m.Name] = m.C0
+		end
+	end
+
+	local looksLikeR15 = currentDummy:FindFirstChild("UpperTorso") ~= nil
+	local targetRig = looksLikeR15 and "R15" or "R6"
+	if targetRig ~= currentRig then
+		switchRig(targetRig)
+	end
+
+	selectJoint(names[1])
+	buildJointButtons()
+	refreshDirtyCount()
+end
+
+local camera = Workspace.CurrentCamera
+UserInputService.InputBegan:Connect(function(input, processed)
+	if processed then return end
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		local ray = camera:ViewportPointToRay(input.Position.X, input.Position.Y)
+		local raycastResult = Workspace:Raycast(ray.Origin, ray.Direction * 500)
+
+		if raycastResult and raycastResult.Instance then
+			local hit = raycastResult.Instance
+			local model = hit:FindFirstAncestorOfClass("Model")
+			if model and model:FindFirstChildOfClass("Humanoid") then
+				selectNewDummy(model)
+			end
+		end
+	end
+end)
+
+local function rotateByButton(axisX, axisY, axisZ)
+	if not currentDummy then return end
+	local motor = getMotor(selected)
+	if not motor then return end
+	motor.C0 = motor.C0 * CFrame.Angles(math.rad(axisX * step), math.rad(axisY * step), math.rad(axisZ * step))
+	markDirty(selected, motor)
+end
+
+local function moveByButton(moveX, moveY, moveZ)
+	if not currentDummy then return end
+	local motor = getMotor(selected)
+	if not motor then return end
+	local factor = step / 20
+	motor.C0 = motor.C0 * CFrame.new(moveX * factor, moveY * factor, moveZ * factor)
+	markDirty(selected, motor)
+end
+
+--// ===== HÀNG NÚT BẤM DỰ PHÒNG (KHÔNG CẦN KÉO TOUCHPAD) =====
+local axisRows = {
+	{label = "X", neg = {-1, 0, 0}, pos = {1, 0, 0}, color = THEME.AxisX},
+	{label = "Y", neg = {0, -1, 0}, pos = {0, 1, 0}, color = THEME.AxisY},
+	{label = "Z", neg = {0, 0, -1}, pos = {0, 0, 1}, color = THEME.AxisZ},
+}
+
+local function buildCompactControlRow(sectionKey, callbackNeg, callbackPos)
+	sectionLabel(sectionKey)
+
+	local container = Instance.new("Frame")
+	container.Size = UDim2.new(1, 0, 0, 24)
+	container.BackgroundTransparency = 1
+	container.LayoutOrder = nextOrder()
+	container.Parent = body
+
+	for i, row in ipairs(axisRows) do
+		local cell = Instance.new("Frame")
+		cell.Size = UDim2.new(0.333, -3, 1, 0)
+		cell.Position = UDim2.new((i - 1) * 0.333, 0, 0, 0)
+		cell.BackgroundTransparency = 1
+		cell.Parent = container
+
+		local layout = Instance.new("UIListLayout")
+		layout.FillDirection = Enum.FillDirection.Horizontal
+		layout.SortOrder = Enum.SortOrder.LayoutOrder
+		layout.Padding = UDim.new(0, 3)
+		layout.Parent = cell
+
+		local btnNeg = Instance.new("TextButton")
+		btnNeg.Size = UDim2.new(0.5, -1, 1, 0)
+		btnNeg.BackgroundColor3 = THEME.ButtonIdle
+		btnNeg.Text = row.label .. "-"
+		btnNeg.Font = Enum.Font.GothamBold
+		btnNeg.TextSize = 9
+		btnNeg.TextColor3 = row.color
+		btnNeg.AutoButtonColor = false
+		btnNeg.Parent = cell
+		addCorner(btnNeg, 5)
+
+		local btnPos = Instance.new("TextButton")
+		btnPos.Size = UDim2.new(0.5, -1, 1, 0)
+		btnPos.BackgroundColor3 = THEME.ButtonIdle
+		btnPos.Text = row.label .. "+"
+		btnPos.Font = Enum.Font.GothamBold
+		btnPos.TextSize = 9
+		btnPos.TextColor3 = row.color
+		btnPos.AutoButtonColor = false
+		btnPos.Parent = cell
+		addCorner(btnPos, 5)
+
+		btnNeg.MouseButton1Click:Connect(function() callbackNeg(row.neg[1], row.neg[2], row.neg[3]) popEffect(btnNeg) end)
+		btnPos.MouseButton1Click:Connect(function() callbackPos(row.pos[1], row.pos[2], row.pos[3]) popEffect(btnPos) end)
+		setupButtonFX(btnNeg, THEME.ButtonIdle)
+		setupButtonFX(btnPos, THEME.ButtonIdle)
+	end
+end
+
+buildCompactControlRow("Rotate", rotateByButton, rotateByButton)
+buildCompactControlRow("Move", moveByButton, moveByButton)
+
+--// ===== RESET / SAVE =====
+local actionRow = Instance.new("Frame")
+actionRow.Size = UDim2.new(1, 0, 0, 30)
+actionRow.BackgroundTransparency = 1
+actionRow.LayoutOrder = nextOrder()
+actionRow.Parent = body
+
+local resetBtn = Instance.new("TextButton")
+resetBtn.Size = UDim2.new(0.5, -3, 1, 0)
+resetBtn.BackgroundColor3 = THEME.ButtonIdle
+resetBtn.Font = Enum.Font.GothamBold
+resetBtn.TextSize = 11
+resetBtn.TextColor3 = THEME.TextMain
+resetBtn.AutoButtonColor = false
+resetBtn.Parent = actionRow
+addCorner(resetBtn, 7)
+addStroke(resetBtn, THEME.TextDim, 1, 0.7)
+setupButtonFX(resetBtn, THEME.ButtonIdle)
+
+resetBtn.MouseButton1Click:Connect(function()
+	if not currentDummy then return end
+	local motor = getMotor(selected)
+	if motor and originalC0[motor.Name] then
+		motor.C0 = originalC0[motor.Name]
+		dirtyMotors[motor] = nil
+		local btn = jointButtons[selected]
+		if btn then
+			btn:SetAttribute("Dirty", false)
+			tweenColor(btn, "BackgroundColor3", THEME.ButtonActive, 0.1)
+		end
+		refreshDirtyCount()
+		popEffect(resetBtn)
+	end
+end)
+
+local saveBtn = Instance.new("TextButton")
+saveBtn.Size = UDim2.new(0.5, -3, 1, 0)
+saveBtn.Position = UDim2.new(0.5, 3, 0, 0)
+saveBtn.BackgroundColor3 = THEME.Success
+saveBtn.Font = Enum.Font.GothamBold
+saveBtn.TextSize = 11
+saveBtn.TextColor3 = Color3.new(1, 1, 1)
+saveBtn.AutoButtonColor = false
+saveBtn.Parent = actionRow
+addCorner(saveBtn, 7)
+addGradient(saveBtn, ColorSequence.new(THEME.Success, THEME.AccentDim), 90)
+setupButtonFX(saveBtn, THEME.Success)
+
+local function generateCFrameString(cf)
+	local px, py, pz = cf.Position.X, cf.Position.Y, cf.Position.Z
+	local rx, ry, rz = cf:ToEulerAnglesXYZ()
+	return string.format("CFrame.new(%.4f, %.4f, %.4f) * CFrame.Angles(%.5f, %.5f, %.5f)", px, py, pz, rx, ry, rz)
+end
+
+saveBtn.MouseButton1Click:Connect(function()
+	local dict = LANG_DATA[currentLang]
+	if not currentDummy then
+		print(dict.NoDummyErr)
+		local original = saveBtn.Text
+		saveBtn.Text = dict.NoDummyErr
+		task.delay(1.2, function() saveBtn.Text = original end)
+		return
+	end
+
+	local fullEntries = {}
+	for _, data in pairs(dirtyMotors) do
+		if data.motor and data.motor.Parent then
+			local full = generateCFrameString(data.motor.C0)
+			table.insert(fullEntries, string.format('\t["%s"] = %s,', data.motor.Name, full))
+		end
+	end
+
+	popEffect(saveBtn)
+
+	if #fullEntries == 0 then
+		print(dict.NoJointsErr)
+		local original = saveBtn.Text
+		saveBtn.Text = dict.EmptyMsg
+		task.delay(0.9, function() saveBtn.Text = original end)
+		return
+	end
+
+	local cleanAnimName = animNameInput.Text ~= "" and animNameInput.Text or "Idle"
+
+	local finalLines = {}
+	table.insert(finalLines, string.format("-- === POSE CODE: %s (%s) ===", cleanAnimName:upper(), currentRig))
+	table.insert(finalLines, string.format("local %s = {", cleanAnimName))
+	for _, line in ipairs(fullEntries) do table.insert(finalLines, line) end
+	table.insert(finalLines, "}")
+
+	local resultText = table.concat(finalLines, "\n")
+	-- Thêm 1 entry MỚI vào danh sách, KHÔNG ghi đè/xóa các lần lưu trước đó (đây là fix cho lỗi bị mất dữ liệu)
+	addOutputEntry(resultText, dict)
+	task.defer(function()
+		-- đợi 1 frame để UIListLayout/AutomaticCanvasSize cập nhật xong rồi mới cuộn xuống cuối
+		outScroll.CanvasPosition = Vector2.new(0, math.max(outScroll.AbsoluteCanvasSize.Y - outScroll.AbsoluteWindowSize.Y, 0))
+	end)
+	print(resultText)
+
+	local original = saveBtn.Text
+	saveBtn.Text = dict.ExportSuccess
+	task.delay(0.8, function() saveBtn.Text = original end)
+end)
+
+copyAllBtn.MouseButton1Click:Connect(function()
+	popEffect(copyAllBtn)
+	local dict = LANG_DATA[currentLang]
+	local allText = getAllEntriesText()
+	if allText ~= "" then
+		if setclipboard then
+			setclipboard(allText)
+			copyAllLabel.Text = dict.Copied
+		else
+			copyAllLabel.Text = dict.NotSupported
+		end
+		task.delay(1, function() copyAllLabel.Text = dict.Copy end)
+	end
+end)
+
+-- Nút Xóa output: xóa toàn bộ các card đã lưu, trả về trạng thái rỗng ban đầu
+clearOutBtn.MouseButton1Click:Connect(function()
+	popEffect(clearOutBtn)
+	local dict = LANG_DATA[currentLang]
+	clearAllOutputEntries()
+	local original = clearOutLabel.Text
+	clearOutLabel.Text = dict.Cleared
+	task.delay(0.8, function() clearOutLabel.Text = original end)
+end)
+
+--// ===== LOGIC CHUYỂN ĐỔI RIG (GLOBAL — gọi từ selectNewDummy phía trên) =====
+function switchRig(newRig)
+	if newRig == currentRig then return end
+	currentRig = newRig
+	names = RIG[currentRig].joints
+	selected = names[1]
+	selectedLabel.Text = selected
+
+	local targetPos = (newRig == "R6") and UDim2.new(0, 0, 0, 0) or UDim2.new(0.5, 0, 0, 0)
+	tween(rigSlider, {Position = targetPos}, 0.2):Play()
+	tweenColor(r6Tab, "TextColor3", (newRig == "R6") and Color3.new(1, 1, 1) or THEME.TextDim, 0.15)
+	tweenColor(r15Tab, "TextColor3", (newRig == "R15") and Color3.new(1, 1, 1) or THEME.TextDim, 0.15)
+
+	for _, b in pairs(jointButtons) do tween(b, {BackgroundTransparency = 1}, 0.08):Play() end
+
+	task.delay(0.1, function()
+		buildJointButtons()
+		for jointName, btn in pairs(jointButtons) do
+			local motor = getMotor(jointName)
+			if motor and dirtyMotors[motor] then
+				btn:SetAttribute("Dirty", true)
+				if jointName ~= selected then btn.BackgroundColor3 = Color3.fromRGB(72, 52, 20) end
+			end
+		end
+		for _, b in pairs(jointButtons) do
+			b.BackgroundTransparency = 1
+			tween(b, {BackgroundTransparency = 0}, 0.15):Play()
+		end
+	end)
+	popEffect(selectedLabel)
+end
+
+r6Tab.MouseButton1Click:Connect(function() switchRig("R6") end)
+r15Tab.MouseButton1Click:Connect(function() switchRig("R15") end)
+
+--// ===== LOGIC TAB NGÔN NGỮ =====
+local function switchLanguage(newLang)
+	if newLang == currentLang then return end
+	local targetPos = (newLang == "VI") and UDim2.new(0, 0, 0, 0) or UDim2.new(0.5, 0, 0, 0)
+	tween(langSlider, {Position = targetPos}, 0.18):Play()
+	tweenColor(viTab, "TextColor3", (newLang == "VI") and Color3.new(1, 1, 1) or THEME.TextDim, 0.12)
+	tweenColor(enTab, "TextColor3", (newLang == "EN") and Color3.new(1, 1, 1) or THEME.TextDim, 0.12)
+
+	updateLanguage(newLang)
+
+	resetBtn.Text = LANG_DATA[newLang].Reset
+	saveBtn.Text = LANG_DATA[newLang].Save
+	gizmoButtons["Move"].label.Text = LANG_DATA[newLang].GizmoMove
+	gizmoButtons["Rotate"].label.Text = LANG_DATA[newLang].GizmoRotate
+	gizmoHintLabel.Text = LANG_DATA[newLang].GizmoHint
+	touchpadLabel.Text = LANG_DATA[newLang].TouchpadLabel
+end
+
+viTab.MouseButton1Click:Connect(function() switchLanguage("VI") end)
+enTab.MouseButton1Click:Connect(function() switchLanguage("EN") end)
+
+--// ===== KÉO KHUNG (DRAG) =====
+local dragging = false
+local dragInput, dragStart, startPos
+
+local function updateDrag(input)
+	local delta = input.Position - dragStart
+	frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+end
+
+header.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		dragging = true
+		dragStart = input.Position
+		startPos = frame.Position
+		input.Changed:Connect(function() if input.UserInputState == Enum.UserInputState.End then dragging = false end end)
+	end
+end)
+
+header.InputChanged:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then dragInput = input end
+end)
+
+UserInputService.InputChanged:Connect(function(input) if input == dragInput and dragging then updateDrag(input) end end)
+
+--// ===== ẨN HIỆN BẢNG =====
+local visible = true
+local lastPos = FRAME_TARGET_POS
+
+local function setVisible(v)
+	if v == visible then return end
+	visible = v
+	if v then
+		frame.Visible = true
+		frame.Position = lastPos - UDim2.new(0, 0, 0, 15)
+		tween(frame, {Position = lastPos}, 0.22, Enum.EasingStyle.Back, Enum.EasingDirection.Out):Play()
+	else
+		lastPos = frame.Position
+		local t = tween(frame, {Position = frame.Position + UDim2.new(0, 0, 0, 15)}, 0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+		t:Play()
+		t.Completed:Connect(function() if not visible then frame.Visible = false end end)
+	end
+end
+
+toggleBtn.MouseButton1Click:Connect(function() popEffect(toggleBtn) setVisible(not visible) end)
+
+local outputVisible = true
+toggleOutputBtn.MouseButton1Click:Connect(function()
+	popEffect(toggleOutputBtn)
+	outputVisible = not outputVisible
+	if outputVisible then
+		outputFrame.Visible = true
+		tween(outputFrame, {Size = UDim2.new(0, 300, 0, FRAME_H)}, 0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out):Play()
+	else
+		local t = tween(outputFrame, {Size = UDim2.new(0, 0, 0, FRAME_H)}, 0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+		t:Play()
+		t.Completed:Connect(function() if not outputVisible then outputFrame.Visible = false end end)
+	end
+end)
+
+closeBtn.MouseButton1Click:Connect(function() setVisible(false) end)
+
+--// ===== KHỞI TẠO BAN ĐẦU =====
+buildJointButtons()
+switchLanguage("VI")
+stepLabel.Text = string.format(LANG_DATA[currentLang].StepValue, step)
+resetBtn.Text = LANG_DATA[currentLang].Reset
+saveBtn.Text = LANG_DATA[currentLang].Save
+gizmoButtons["Move"].btn.BackgroundColor3 = gizmoButtons["Move"].color
+
+local firstDummy = Workspace:FindFirstChild("Dummy") or Workspace:FindFirstChildOfClass("Model")
+if firstDummy and firstDummy:FindFirstChildOfClass("Humanoid") then selectNewDummy(firstDummy) end
